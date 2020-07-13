@@ -7,7 +7,7 @@ use crate::window::*;
 
 fn main() -> io::Result<()> {
     let mut raw = RawMode::new()?;
-    let window = Window::new()?;
+    let mut window = Window::new(&mut raw.stdin)?;
     window.refresh_screen()?;
     raw.process_keypress()?;
     Ok(())
