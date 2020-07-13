@@ -1,19 +1,28 @@
+use crate::input::CursorMoveDirection;
 use std::io::{self, Read, Write};
 
 pub struct Window {
-    pub height: u16,
-    pub width: u16,
+    pub cx: usize,
+    pub cy: usize,
+    pub rows: u16,
+    pub columns: u16,
     pub stdout: io::Stdout,
+    pub text_buffer: String,
 }
+
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 impl Window {
     pub fn new(mut stdin: &mut io::Stdin) -> Result<Window, io::Error> {
         let mut stdout = io::stdout();
         match get_window_size(&mut stdin, &mut stdout) {
-            Ok(Some((width, height))) => Ok(Window {
-                width,
-                height,
+            Ok(Some((columns, rows))) => Ok(Window {
+                cx: 0,
+                cy: 0,
+                columns,
+                rows,
                 stdout,
+                text_buffer: "".to_string(),
             }),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -24,20 +33,72 @@ impl Window {
     }
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
-        write!(self.stdout, "\x1b[2J")?;
-        write!(self.stdout, "\x1b[H")?;
+        self.text_buffer.push_str("\x1b[?25l\x1b[H");
         self.editor_draw_rows()?;
-        write!(self.stdout, "\x1b[H")?;
+        self.text_buffer
+            .push_str(&format!("\x1b[{};{}H", self.cy + 1, self.cx + 1));
+        self.text_buffer.push_str("\x1b[?25h");
+
+        write!(self.stdout, "{}", self.text_buffer)?;
         self.stdout.flush()?;
+        self.text_buffer.clear();
         Ok(())
     }
 
     fn editor_draw_rows(&mut self) -> io::Result<()> {
-        for _ in 0..self.height {
-            write!(self.stdout, "~\r\n")?;
+        use std::cmp::min;
+        for y in 0..self.rows {
+            if y == self.rows / 3 {
+                let welcome = format!("Kilo in Rust -- version {}", VERSION);
+                let mut padding = (self.columns as usize - welcome.len()) / 2;
+                if padding > 0 {
+                    self.text_buffer.push_str("~");
+                    padding -= 1;
+                }
+                for _ in 0..padding {
+                    self.text_buffer.push_str(" ");
+                }
+                self.text_buffer
+                    .push_str(&welcome[..min(welcome.len(), self.columns as usize)])
+            } else {
+                self.text_buffer.push_str("~");
+            }
+            self.text_buffer.push_str("\x1b[K");
+            if y < self.rows - 1 {
+                self.text_buffer.push_str("\r\n");
+            }
         }
-        self.stdout.flush()?;
         Ok(())
+    }
+
+    pub fn move_cursor(&mut self, direction: CursorMoveDirection) {
+        use CursorMoveDirection::*;
+        match direction {
+            Down => {
+                if self.rows as usize > self.cy {
+                    self.cy += 1
+                }
+            }
+            Up => {
+                if 0 < self.cy {
+                    self.cy -= 1
+                }
+            }
+            Right => {
+                if self.columns as usize > self.cx {
+                    self.cx += 1;
+                }
+            }
+            Left => {
+                if self.cx > 0 {
+                    self.cx -= 1;
+                }
+            }
+            Top => self.cy = 0,
+            Bottom => self.cy = (self.rows - 1) as usize,
+            LineTop => self.cx = 0,
+            LineBottom => self.cx = (self.columns - 1) as usize,
+        }
     }
 }
 
@@ -45,7 +106,7 @@ fn get_cursor_position(stdin: &mut io::Stdin) -> io::Result<Option<(u16, u16)>> 
     let mut bytes: Vec<u8> = vec![];
     for (i, b) in stdin.bytes().enumerate() {
         bytes.push(b.unwrap_or(0));
-        if bytes[i] == b'R' || i > 31 {
+        if bytes[i] == b'R' {
             println!("bytes:{}, {}", bytes[i], b'R');
             break;
         }
