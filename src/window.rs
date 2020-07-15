@@ -13,6 +13,7 @@ pub struct Window {
     pub stdout: io::Stdout,
     pub text_buffer: String,
     pub content_buffer: Vec<String>,
+    pub render_buffer: Vec<String>,
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -32,6 +33,7 @@ impl Window {
                 stdout,
                 text_buffer: String::new(),
                 content_buffer: vec![],
+                render_buffer: vec![],
             }),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -78,7 +80,7 @@ impl Window {
                     self.text_buffer.push_str("~");
                 }
             } else {
-                if let Some(line) = &self.content_buffer.get(filerow) {
+                if let Some(line) = &self.render_buffer.get(filerow) {
                     let line_min = if line.len() > 0 && self.col_offset < line.len() {
                         self.col_offset
                     } else {
@@ -170,15 +172,25 @@ impl Window {
     }
 
     pub fn open_file(&mut self, filename: String) -> io::Result<()> {
-        self.content_buffer = vec![];
-        self.text_rows = 0;
-
         for line in BufReader::new(File::open(filename)?).lines() {
             let line = line?;
-            self.content_buffer.push(format!("{}", line));
+            self.push_to_render_buffer(&line);
+            self.content_buffer.push(line);
             self.text_rows += 1;
         }
         Ok(())
+    }
+
+    fn push_to_render_buffer(&mut self, line: &String) {
+        let mut string = String::new();
+        for char in line.chars() {
+            if char == '\t' {
+                string.push_str("        ");
+            } else {
+                string.push(char);
+            }
+        }
+        self.render_buffer.push(string);
     }
 }
 
