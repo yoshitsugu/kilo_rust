@@ -28,6 +28,8 @@ pub const CTRL_N: u8 = b'n' & 0x1f;
 pub const CTRL_B: u8 = b'b' & 0x1f;
 pub const CTRL_F: u8 = b'f' & 0x1f;
 pub const CTRL_P: u8 = b'p' & 0x1f;
+pub const CTRL_A: u8 = b'a' & 0x1f;
+pub const CTRL_E: u8 = b'e' & 0x1f;
 
 pub enum LoopStatus {
     CONTINUE,
@@ -98,6 +100,8 @@ impl RawMode {
                     CTRL_N => Ok(CursorMove(Down)),
                     CTRL_F => Ok(CursorMove(Right)),
                     CTRL_B => Ok(CursorMove(Left)),
+                    CTRL_A => Ok(CursorMove(LineTop)),
+                    CTRL_E => Ok(CursorMove(LineBottom)),
                     c => Ok(Char(c)),
                 };
             }
