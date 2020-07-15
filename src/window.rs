@@ -118,6 +118,9 @@ impl Window {
                 if let Some(line) = self.content_buffer.get(self.cy) {
                     if self.cx < line.len() {
                         self.cx += 1;
+                    } else if self.cx == line.len() {
+                        self.cy += 1;
+                        self.cx = 0;
                     }
                 }
             }
