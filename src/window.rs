@@ -3,7 +3,8 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
 
 pub struct Window {
-    pub cx: usize,
+    pub cx: usize, // 文字列上でのカーソル位置
+    pub rx: usize, // 実際にレンダリングされたカーソル位置
     pub cy: usize,
     pub rows: usize,
     pub columns: usize,
@@ -17,6 +18,7 @@ pub struct Window {
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const KILO_TAB_STOP: usize = 8;
 
 impl Window {
     pub fn new(mut stdin: &mut io::Stdin) -> Result<Window, io::Error> {
@@ -24,6 +26,7 @@ impl Window {
         match get_window_size(&mut stdin, &mut stdout) {
             Ok(Some((columns, rows))) => Ok(Window {
                 cx: 0,
+                rx: 0,
                 cy: 0,
                 columns: columns as usize,
                 rows: rows as usize,
@@ -50,7 +53,7 @@ impl Window {
         self.text_buffer.push_str(&format!(
             "\x1b[{};{}H",
             (self.cy - self.row_offset) + 1,
-            (self.cx - self.col_offset) + 1
+            (self.rx - self.col_offset) + 1
         ));
         self.text_buffer.push_str("\x1b[?25h");
         write!(self.stdout, "{}", self.text_buffer)?;
@@ -156,18 +159,36 @@ impl Window {
         self.cx = min(self.cx, line_length);
     }
 
+    fn cx_to_rx(&self, line: &String) -> usize {
+        let mut rx = 0;
+        for (char_index, char) in line.chars().enumerate() {
+            if self.cx == char_index {
+                break;
+            }
+            if char == '\t' {
+                rx += (KILO_TAB_STOP - 1) - (rx % KILO_TAB_STOP);
+            }
+            rx += 1
+        }
+        rx
+    }
+
     pub fn editor_scroll(&mut self) {
+        self.rx = 0;
+        if self.cy < self.content_buffer.len() {
+            self.rx = self.cx_to_rx(&self.content_buffer[self.cy]);
+        }
         if self.cy < self.row_offset {
             self.row_offset = self.cy;
         }
         if self.cy >= self.row_offset + self.rows {
             self.row_offset = self.cy - self.rows + 1;
         }
-        if self.cx < self.col_offset {
-            self.col_offset = self.cx
+        if self.rx < self.col_offset {
+            self.col_offset = self.rx
         }
-        if self.cx >= self.col_offset + self.columns {
-            self.col_offset = self.cx - self.columns + 1
+        if self.rx >= self.col_offset + self.columns {
+            self.col_offset = self.rx - self.columns + 1
         }
     }
 
@@ -183,9 +204,14 @@ impl Window {
 
     fn push_to_render_buffer(&mut self, line: &String) {
         let mut string = String::new();
-        for char in line.chars() {
+        for (char_index, char) in line.chars().enumerate() {
             if char == '\t' {
-                string.push_str("        ");
+                string.push(' ');
+                let mut m = char_index + 1;
+                while m % KILO_TAB_STOP != 0 {
+                    string.push(' ');
+                    m += 1;
+                }
             } else {
                 string.push(char);
             }
@@ -196,12 +222,8 @@ impl Window {
 
 fn get_cursor_position(stdin: &mut io::Stdin) -> io::Result<Option<(u16, u16)>> {
     let mut bytes: Vec<u8> = vec![];
-    for (i, b) in stdin.bytes().enumerate() {
+    for b in stdin.bytes() {
         bytes.push(b.unwrap_or(0));
-        if bytes[i] == b'R' {
-            println!("bytes:{}, {}", bytes[i], b'R');
-            break;
-        }
     }
     if bytes[0] != b'\x1b' || bytes[1] != b'[' {
         return Ok(None);
