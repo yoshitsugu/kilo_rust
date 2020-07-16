@@ -7,8 +7,8 @@ pub enum CursorMoveDirection {
     Right,
     Up,
     Down,
-    Top,
-    Bottom,
+    PageUp,
+    PageDown,
     LineTop,
     LineBottom,
 }
@@ -69,8 +69,8 @@ impl RawMode {
                             b'1' => Ok(CursorMove(LineTop)),    // Homeキー
                             b'3' => Ok(Del),                    // Delキー
                             b'4' => Ok(CursorMove(LineBottom)), // Endキー
-                            b'5' => Ok(CursorMove(Top)),        // PageUpキー
-                            b'6' => Ok(CursorMove(Bottom)),     // PageDownキー
+                            b'5' => Ok(CursorMove(PageUp)),     // PageUpキー
+                            b'6' => Ok(CursorMove(PageDown)),   // PageDownキー
                             b'7' => Ok(CursorMove(LineTop)),    // Homeキー
                             b'8' => Ok(CursorMove(LineBottom)), // Endキー
                             _ => Ok(Char(b'\x1b')),

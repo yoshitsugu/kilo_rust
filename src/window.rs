@@ -141,8 +141,21 @@ impl Window {
                     self.cx = line_length;
                 }
             }
-            Top => self.cy = 0,
-            Bottom => self.cy = self.rows - 1,
+            PageUp => {
+                self.cy = self.row_offset;
+                for _ in 0..self.rows {
+                    self.move_cursor(Up);
+                }
+            }
+            PageDown => {
+                self.cy = self.row_offset + self.rows - 1;
+                if self.cy > self.content_buffer.len() {
+                    self.cy = self.content_buffer.len();
+                }
+                for _ in 0..self.rows {
+                    self.move_cursor(Down);
+                }
+            }
             LineTop => self.cx = 0,
             LineBottom => {
                 if let Some(line) = self.content_buffer.get(self.cy) {
