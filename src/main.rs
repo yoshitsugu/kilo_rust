@@ -13,6 +13,8 @@ fn main() -> io::Result<()> {
         window.open_file(args[1].to_string())?;
     }
 
+    window.editor_set_status_mssage("HELP: Ctrl-Q = quit");
+
     loop {
         window.refresh_screen()?;
         match raw.process_keypress(&mut window)? {

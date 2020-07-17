@@ -1,6 +1,7 @@
 use crate::input::CursorMoveDirection;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::time::{Instant, Duration};
 
 pub struct Window {
     pub cx: usize, // 文字列上でのカーソル位置
@@ -15,10 +16,14 @@ pub struct Window {
     pub text_buffer: String,
     pub content_buffer: Vec<String>,
     pub render_buffer: Vec<String>,
+    pub filename: Option<String>,
+    pub status_message: String,
+    pub message_time: Instant,
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const KILO_TAB_STOP: usize = 8;
+const DISPLAY_STATUS_MESSAGE_DURATION: u64 = 5;
 
 impl Window {
     pub fn new(mut stdin: &mut io::Stdin) -> Result<Window, io::Error> {
@@ -29,7 +34,7 @@ impl Window {
                 rx: 0,
                 cy: 0,
                 columns: columns as usize,
-                rows: rows as usize,
+                rows: (rows as usize) - 2,
                 text_rows: 0,
                 row_offset: 0,
                 col_offset: 0,
@@ -37,6 +42,9 @@ impl Window {
                 text_buffer: String::new(),
                 content_buffer: vec![],
                 render_buffer: vec![],
+                filename: None,
+                status_message: String::new(),
+                message_time: Instant::now(),
             }),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -46,10 +54,40 @@ impl Window {
         }
     }
 
+    fn editor_draw_status_bar(&mut self) {
+        let status_left = format!(
+            "{}",
+            (self.filename.clone()).unwrap_or("[NO NAME]".to_string()),
+        );
+        let status_right = format!("{}/{}", self.cy, self.content_buffer.len());
+        self.text_buffer.push_str(&format!(
+            "\x1b[7m{}{}{}\x1b[m\r\n",
+            status_left,
+            (0..(self.columns - (status_left.len() + status_right.len())))
+                .map(|_| " ")
+                .collect::<String>(),
+            status_right
+        ));
+    }
+
+    fn editor_draw_message_bar(&mut self) {
+        self.text_buffer.push_str("\x1b[K");
+        if Instant::now() - self.message_time < Duration::from_secs(DISPLAY_STATUS_MESSAGE_DURATION) {
+            self.text_buffer.push_str(&self.status_message);
+        }
+    }
+
+    pub fn editor_set_status_mssage<T: ToString>(&mut self, message: T) {
+        self.status_message = message.to_string();
+        self.message_time = Instant::now();
+    }
+
     pub fn refresh_screen(&mut self) -> io::Result<()> {
         self.editor_scroll();
         self.text_buffer.push_str("\x1b[?25l\x1b[H");
         self.editor_draw_rows()?;
+        self.editor_draw_status_bar();
+        self.editor_draw_message_bar();
         self.text_buffer.push_str(&format!(
             "\x1b[{};{}H",
             (self.cy - self.row_offset) + 1,
@@ -98,9 +136,7 @@ impl Window {
                 }
             }
             self.text_buffer.push_str("\x1b[K");
-            if y < self.rows - 1 {
-                self.text_buffer.push_str("\r\n");
-            }
+            self.text_buffer.push_str("\r\n");
         }
         Ok(())
     }
@@ -206,6 +242,7 @@ impl Window {
     }
 
     pub fn open_file(&mut self, filename: String) -> io::Result<()> {
+        self.filename = Some(filename.to_string());
         for line in BufReader::new(File::open(filename)?).lines() {
             let line = line?;
             self.push_to_render_buffer(&line);
