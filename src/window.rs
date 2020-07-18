@@ -1,7 +1,7 @@
 use crate::input::CursorMoveDirection;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 pub struct Window {
     pub cx: usize, // 文字列上でのカーソル位置
@@ -72,7 +72,8 @@ impl Window {
 
     fn editor_draw_message_bar(&mut self) {
         self.text_buffer.push_str("\x1b[K");
-        if Instant::now() - self.message_time < Duration::from_secs(DISPLAY_STATUS_MESSAGE_DURATION) {
+        if Instant::now() - self.message_time < Duration::from_secs(DISPLAY_STATUS_MESSAGE_DURATION)
+        {
             self.text_buffer.push_str(&self.status_message);
         }
     }
@@ -80,6 +81,18 @@ impl Window {
     pub fn editor_set_status_mssage<T: ToString>(&mut self, message: T) {
         self.status_message = message.to_string();
         self.message_time = Instant::now();
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        use std::cmp::min;
+        if self.cy == self.content_buffer.len() {
+            self.content_buffer.push(String::new());
+            self.render_buffer.push(String::new());
+        }
+        let at = min(self.cx, self.content_buffer[self.cy].len());
+        self.content_buffer[self.cy].insert(at, c);
+        self.render_buffer[self.cy] = self.to_render_line(&self.content_buffer[self.cy]);
+        self.cx += 1;
     }
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
@@ -245,14 +258,14 @@ impl Window {
         self.filename = Some(filename.to_string());
         for line in BufReader::new(File::open(filename)?).lines() {
             let line = line?;
-            self.push_to_render_buffer(&line);
+            self.render_buffer.push(self.to_render_line(&line));
             self.content_buffer.push(line);
             self.text_rows += 1;
         }
         Ok(())
     }
 
-    fn push_to_render_buffer(&mut self, line: &String) {
+    fn to_render_line(&self, line: &String) -> String {
         let mut string = String::new();
         for (char_index, char) in line.chars().enumerate() {
             if char == '\t' {
@@ -266,7 +279,7 @@ impl Window {
                 string.push(char);
             }
         }
-        self.render_buffer.push(string);
+        string
     }
 }
 

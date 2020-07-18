@@ -126,7 +126,7 @@ impl RawMode {
                 io::stdout().flush()?;
             }
             Char(c) => {
-                print!("{:?}\r\n", c);
+                window.insert_char(char::from(c));
                 io::stdout().flush()?;
             }
         }
