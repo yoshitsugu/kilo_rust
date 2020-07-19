@@ -1,6 +1,7 @@
 use crate::input::CursorMoveDirection;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 pub struct Window {
@@ -9,14 +10,13 @@ pub struct Window {
     pub cy: usize,
     pub rows: usize,
     pub columns: usize,
-    pub text_rows: usize,
     pub row_offset: usize,
     pub col_offset: usize,
     pub stdout: io::Stdout,
     pub text_buffer: String,
     pub content_buffer: Vec<String>,
     pub render_buffer: Vec<String>,
-    pub filename: Option<String>,
+    pub filename: Option<PathBuf>,
     pub status_message: String,
     pub message_time: Instant,
 }
@@ -35,7 +35,6 @@ impl Window {
                 cy: 0,
                 columns: columns as usize,
                 rows: (rows as usize) - 2,
-                text_rows: 0,
                 row_offset: 0,
                 col_offset: 0,
                 stdout,
@@ -55,10 +54,15 @@ impl Window {
     }
 
     fn editor_draw_status_bar(&mut self) {
-        let status_left = format!(
-            "{}",
-            (self.filename.clone()).unwrap_or("[NO NAME]".to_string()),
-        );
+        let filename = if let Some(path) = &self.filename {
+            match path.file_name() {
+                Some(osstr) => osstr.to_str().unwrap_or("[NO NAME]").to_string(),
+                None => "[NO NAME]".to_string(),
+            }
+        } else {
+            "[NO NAME]".to_string()
+        };
+        let status_left = format!("{}", filename,);
         let status_right = format!("{}/{}", self.cy, self.content_buffer.len());
         self.text_buffer.push_str(&format!(
             "\x1b[7m{}{}{}\x1b[m\r\n",
@@ -117,8 +121,8 @@ impl Window {
         use std::cmp::min;
         for y in 0..self.rows {
             let filerow = y + self.row_offset;
-            if filerow >= self.text_rows {
-                if self.text_rows == 0 && y == self.rows / 3 {
+            if filerow >= self.content_buffer.len() {
+                if self.filename.is_none() && y == self.rows / 3 {
                     let welcome = format!("Kilo in Rust -- version {}", VERSION);
                     let mut padding = (self.columns - welcome.len()) / 2;
                     if padding > 0 {
@@ -159,7 +163,7 @@ impl Window {
         use CursorMoveDirection::*;
         match direction {
             Down => {
-                if self.text_rows > self.cy {
+                if self.content_buffer.len() > self.cy {
                     self.cy += 1;
                 }
             }
@@ -255,12 +259,27 @@ impl Window {
     }
 
     pub fn open_file(&mut self, filename: String) -> io::Result<()> {
-        self.filename = Some(filename.to_string());
+        use std::fs::canonicalize;
+        use std::path::Path;
+        self.filename = Some(canonicalize(Path::new(&filename))?);
         for line in BufReader::new(File::open(filename)?).lines() {
             let line = line?;
             self.render_buffer.push(self.to_render_line(&line));
             self.content_buffer.push(line);
-            self.text_rows += 1;
+        }
+        Ok(())
+    }
+
+    pub fn save_file(&mut self) -> io::Result<()> {
+        if let Some(filename) = &self.filename {
+            let mut file_writer = BufWriter::new(File::create(filename)?);
+            let mut written_bytes = 0;
+            for line in &self.content_buffer {
+                file_writer.write(&format!("{}\n", &line).as_bytes())?;
+                written_bytes += format!("{}\n", &line).as_bytes().len();
+            }
+            file_writer.flush()?;
+            self.editor_set_status_mssage(format!("{} bytes written to disk", written_bytes));
         }
         Ok(())
     }

@@ -16,6 +16,7 @@ pub enum InputType {
     CursorMove(CursorMoveDirection),
     Char(u8),
     Del,
+    Save,
 }
 
 pub struct RawMode {
@@ -30,6 +31,10 @@ pub const CTRL_F: u8 = b'f' & 0x1f;
 pub const CTRL_P: u8 = b'p' & 0x1f;
 pub const CTRL_A: u8 = b'a' & 0x1f;
 pub const CTRL_E: u8 = b'e' & 0x1f;
+pub const CTRL_H: u8 = b'h' & 0x1f;
+pub const CTRL_L: u8 = b'l' & 0x1f;
+pub const CTRL_S: u8 = b's' & 0x1f;
+pub const BACKSPACE: u8 = 127;
 
 pub enum LoopStatus {
     CONTINUE,
@@ -102,6 +107,9 @@ impl RawMode {
                     CTRL_B => Ok(CursorMove(Left)),
                     CTRL_A => Ok(CursorMove(LineTop)),
                     CTRL_E => Ok(CursorMove(LineBottom)),
+                    CTRL_H => unimplemented!(),
+                    CTRL_L => unimplemented!(),
+                    CTRL_S => Ok(Save),
                     c => Ok(Char(c)),
                 };
             }
@@ -114,16 +122,21 @@ impl RawMode {
         let input_type = self.readkey()?;
         match input_type {
             Char(b'\x1b') => {}
+            Char(b'\r') => unimplemented!(),
             Char(CTRL_Q) => {
                 write!(io::stdout(), "\x1b[2J")?;
                 write!(io::stdout(), "\x1b[H")?;
                 io::stdout().flush()?;
                 return Ok(LoopStatus::STOP);
             }
+            Char(BACKSPACE) => unimplemented!(),
             CursorMove(d) => window.move_cursor(d),
             Del => {
                 print!("Del key pressed\r\n");
                 io::stdout().flush()?;
+            }
+            Save => {
+                window.save_file()?;
             }
             Char(c) => {
                 window.insert_char(char::from(c));
