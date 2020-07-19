@@ -124,10 +124,7 @@ impl RawMode {
             Char(b'\x1b') => {}
             Char(b'\r') => unimplemented!(),
             Char(CTRL_Q) => {
-                write!(io::stdout(), "\x1b[2J")?;
-                write!(io::stdout(), "\x1b[H")?;
-                io::stdout().flush()?;
-                return Ok(LoopStatus::STOP);
+                return window.quit();
             }
             Char(BACKSPACE) => unimplemented!(),
             CursorMove(d) => window.move_cursor(d),

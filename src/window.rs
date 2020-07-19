@@ -1,4 +1,4 @@
-use crate::input::CursorMoveDirection;
+use crate::input::{CursorMoveDirection, LoopStatus};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
@@ -19,6 +19,8 @@ pub struct Window {
     pub filename: Option<PathBuf>,
     pub status_message: String,
     pub message_time: Instant,
+    pub dirty: bool,
+    pub quit_confirming: bool,
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -44,6 +46,8 @@ impl Window {
                 filename: None,
                 status_message: String::new(),
                 message_time: Instant::now(),
+                dirty: false,
+                quit_confirming: false,
             }),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -62,7 +66,8 @@ impl Window {
         } else {
             "[NO NAME]".to_string()
         };
-        let status_left = format!("{}", filename,);
+        let dirty_symbol = if self.dirty { "*" } else { "" };
+        let status_left = format!("{}{}", filename, dirty_symbol);
         let status_right = format!("{}/{}", self.cy, self.content_buffer.len());
         self.text_buffer.push_str(&format!(
             "\x1b[7m{}{}{}\x1b[m\r\n",
@@ -97,6 +102,7 @@ impl Window {
         self.content_buffer[self.cy].insert(at, c);
         self.render_buffer[self.cy] = self.to_render_line(&self.content_buffer[self.cy]);
         self.cx += 1;
+        self.dirty = true;
     }
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
@@ -280,6 +286,7 @@ impl Window {
             }
             file_writer.flush()?;
             self.editor_set_status_mssage(format!("{} bytes written to disk", written_bytes));
+            self.dirty = false;
         }
         Ok(())
     }
@@ -299,6 +306,20 @@ impl Window {
             }
         }
         string
+    }
+
+    pub fn quit(&mut self) -> io::Result<LoopStatus> {
+        if self.dirty && !self.quit_confirming {
+            self.editor_set_status_mssage(
+                "WARNING!!! File has unsaved changed. Press Ctrl-q to quit",
+            );
+            self.quit_confirming = true;
+            return Ok(LoopStatus::CONTINUE);
+        }
+        write!(self.stdout, "\x1b[2J")?;
+        write!(self.stdout, "\x1b[H")?;
+        self.stdout.flush()?;
+        Ok(LoopStatus::STOP)
     }
 }
 
