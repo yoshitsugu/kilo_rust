@@ -16,6 +16,7 @@ pub enum InputType {
     CursorMove(CursorMoveDirection),
     Char(u8),
     Del,
+    Backspace,
     Save,
 }
 
@@ -107,7 +108,8 @@ impl RawMode {
                     CTRL_B => Ok(CursorMove(Left)),
                     CTRL_A => Ok(CursorMove(LineTop)),
                     CTRL_E => Ok(CursorMove(LineBottom)),
-                    CTRL_H => unimplemented!(),
+                    BACKSPACE => Ok(Backspace),
+                    CTRL_H => Ok(Backspace),
                     CTRL_L => unimplemented!(),
                     CTRL_S => Ok(Save),
                     c => Ok(Char(c)),
@@ -118,19 +120,26 @@ impl RawMode {
     }
 
     pub fn process_keypress(&mut self, window: &mut Window) -> io::Result<LoopStatus> {
+        use CursorMoveDirection::*;
         use InputType::*;
         let input_type = self.readkey()?;
         match input_type {
-            Char(b'\x1b') => {}
+            Char(b'\x1b') => {
+                return Ok(LoopStatus::CONTINUE);
+            }
             Char(b'\r') => unimplemented!(),
             Char(CTRL_Q) => {
                 return window.quit();
             }
-            Char(BACKSPACE) => unimplemented!(),
-            CursorMove(d) => window.move_cursor(d),
+            Backspace => {
+                window.delete_char();
+            }
+            CursorMove(d) => {
+                window.move_cursor(d);
+            }
             Del => {
-                print!("Del key pressed\r\n");
-                io::stdout().flush()?;
+                window.move_cursor(Right);
+                window.delete_char();
             }
             Save => {
                 window.save_file()?;
@@ -140,6 +149,7 @@ impl RawMode {
                 io::stdout().flush()?;
             }
         }
+        window.quit_confirming = false;
         Ok(LoopStatus::CONTINUE)
     }
 }

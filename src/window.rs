@@ -105,6 +105,30 @@ impl Window {
         self.dirty = true;
     }
 
+    pub fn delete_char(&mut self) {
+        if self.cy == self.rows {
+            return;
+        }
+        if self.cx == 0 && self.cy == 0 {
+            return;
+        }
+        if self.cx > 0 {
+            self.content_buffer[self.cy].remove(self.cx - 1);
+            self.cx -= 1;
+            self.render_buffer[self.cy] = self.to_render_line(&self.content_buffer[self.cy]);
+        } else {
+            self.cx = self.content_buffer[self.cy - 1].len();
+            let line = &self.content_buffer[self.cy].clone();
+            self.content_buffer[self.cy - 1].push_str(&line);
+            self.render_buffer[self.cy - 1] =
+                self.to_render_line(&self.content_buffer[self.cy - 1]);
+            self.content_buffer.remove(self.cy);
+            self.render_buffer.remove(self.cy);
+            self.cy -= 1;
+        }
+        self.dirty = true;
+    }
+
     pub fn refresh_screen(&mut self) -> io::Result<()> {
         self.editor_scroll();
         self.text_buffer.push_str("\x1b[?25l\x1b[H");
