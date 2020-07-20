@@ -129,6 +129,20 @@ impl Window {
         self.dirty = true;
     }
 
+    pub fn break_line(&mut self) {
+        let line = &self.content_buffer[self.cy].clone();
+        let remain = &line[..self.cx];
+        let rest = &line[self.cx..line.len()];
+        self.content_buffer[self.cy] = remain.to_string();
+        self.content_buffer.insert(self.cy + 1, rest.to_string());
+        self.render_buffer[self.cy] = self.to_render_line(&remain.to_string());
+        self.render_buffer
+            .insert(self.cy + 1, self.to_render_line(&rest.to_string()));
+        self.cy += 1;
+        self.cx = 0;
+        self.dirty = true;
+    }
+
     pub fn refresh_screen(&mut self) -> io::Result<()> {
         self.editor_scroll();
         self.text_buffer.push_str("\x1b[?25l\x1b[H");

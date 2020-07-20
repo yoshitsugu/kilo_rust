@@ -127,7 +127,9 @@ impl RawMode {
             Char(b'\x1b') => {
                 return Ok(LoopStatus::CONTINUE);
             }
-            Char(b'\r') => unimplemented!(),
+            Char(b'\r') => {
+                window.break_line();
+            }
             Char(CTRL_Q) => {
                 return window.quit();
             }
