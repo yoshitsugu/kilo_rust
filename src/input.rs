@@ -18,6 +18,7 @@ pub enum InputType {
     Del,
     Backspace,
     Save,
+    NoOp,
 }
 
 pub struct RawMode {
@@ -116,7 +117,7 @@ impl RawMode {
                 };
             }
         }
-        Ok(Char(b'\x1b'))
+        Ok(NoOp)
     }
 
     pub fn process_keypress(&mut self, window: &mut Window) -> io::Result<LoopStatus> {
@@ -144,11 +145,14 @@ impl RawMode {
                 window.delete_char();
             }
             Save => {
-                window.save_file()?;
+                window.save_file(self)?;
             }
             Char(c) => {
                 window.insert_char(char::from(c));
                 io::stdout().flush()?;
+            }
+            NoOp => {
+                return Ok(LoopStatus::CONTINUE);
             }
         }
         window.quit_confirming = false;

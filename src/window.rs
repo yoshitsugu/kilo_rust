@@ -1,4 +1,4 @@
-use crate::input::{CursorMoveDirection, LoopStatus};
+use crate::input::{CursorMoveDirection, LoopStatus, RawMode};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
@@ -68,7 +68,7 @@ impl Window {
         };
         let dirty_symbol = if self.dirty { "*" } else { "" };
         let status_left = format!("{}{}", filename, dirty_symbol);
-        let status_right = format!("{}/{}", self.cy, self.content_buffer.len());
+        let status_right = format!("{}/{}", self.cy + 1, self.content_buffer.len());
         self.text_buffer.push_str(&format!(
             "\x1b[7m{}{}{}\x1b[m\r\n",
             status_left,
@@ -165,8 +165,8 @@ impl Window {
         use std::cmp::min;
         for y in 0..self.rows {
             let filerow = y + self.row_offset;
-            if filerow >= self.content_buffer.len() {
-                if self.filename.is_none() && y == self.rows / 3 {
+            if self.filename.is_none() && filerow >= self.content_buffer.len() {
+                if self.content_buffer.len() == 0 && y == self.rows / 3 {
                     let welcome = format!("Kilo in Rust -- version {}", VERSION);
                     let mut padding = (self.columns - welcome.len()) / 2;
                     if padding > 0 {
@@ -314,17 +314,61 @@ impl Window {
         Ok(())
     }
 
-    pub fn save_file(&mut self) -> io::Result<()> {
-        if let Some(filename) = &self.filename {
-            let mut file_writer = BufWriter::new(File::create(filename)?);
-            let mut written_bytes = 0;
-            for line in &self.content_buffer {
-                file_writer.write(&format!("{}\n", &line).as_bytes())?;
-                written_bytes += format!("{}\n", &line).as_bytes().len();
+    fn editor_prompt(&mut self, input: &mut RawMode, format: &str) -> io::Result<Option<String>> {
+        use crate::input::InputType::*;
+        let mut prompt_buffer = String::new();
+        loop {
+            self.editor_set_status_mssage(str::replace(format, "{}", &prompt_buffer));
+            self.refresh_screen()?;
+
+            let input_type = input.readkey()?;
+            match input_type {
+                Char(b'\x1b') => {
+                    self.editor_set_status_mssage(String::new());
+                    return Ok(None);
+                }
+                Char(b'\r') => {
+                    self.editor_set_status_mssage(String::new());
+                    return Ok(Some(prompt_buffer));
+                }
+                Backspace | Del => {
+                    if prompt_buffer.len() > 0 {
+                        prompt_buffer.pop();
+                    }
+                }
+                Char(c) => {
+                    prompt_buffer.push(char::from(c));
+                }
+                _ => {}
             }
-            file_writer.flush()?;
-            self.editor_set_status_mssage(format!("{} bytes written to disk", written_bytes));
-            self.dirty = false;
+        }
+    }
+
+    pub fn save_file(&mut self, input: &mut RawMode) -> io::Result<()> {
+        let mut filename;
+        if self.filename.is_some() {
+            filename = self.filename.clone().unwrap();
+        } else {
+            let result = self.editor_prompt(input, "Save as {} (ESC to cancel)")?;
+            if let Some(f) = result {
+                filename = PathBuf::new();
+                filename.push(&f);
+            } else {
+                self.editor_set_status_mssage("Save aborted");
+                return Ok(());
+            }
+        }
+        let mut file_writer = BufWriter::new(File::create(&filename)?);
+        let mut written_bytes = 0;
+        for line in &self.content_buffer {
+            file_writer.write(&format!("{}\n", &line).as_bytes())?;
+            written_bytes += format!("{}\n", &line).as_bytes().len();
+        }
+        file_writer.flush()?;
+        self.editor_set_status_mssage(format!("{} bytes written to disk", written_bytes));
+        self.dirty = false;
+        if self.filename.is_none() {
+            self.filename = Some(filename);
         }
         Ok(())
     }
