@@ -25,7 +25,7 @@ pub struct Window {
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const KILO_TAB_STOP: usize = 8;
-const DISPLAY_STATUS_MESSAGE_DURATION: u64 = 5;
+const DISPLAY_STATUS_MESSAGE_DURATION: u64 = 3;
 
 impl Window {
     pub fn new(mut stdin: &mut io::Stdin) -> Result<Window, io::Error> {
@@ -340,6 +340,31 @@ impl Window {
                     prompt_buffer.push(char::from(c));
                 }
                 _ => {}
+            }
+        }
+    }
+
+    pub fn set_control_x(&mut self, input: &mut RawMode) -> io::Result<()> {
+        use crate::input::InputType::*;
+        self.editor_set_status_mssage("C-x -");
+        self.refresh_screen()?;
+
+        loop {
+            let input_type = input.readkey()?;
+            match input_type {
+                Char(b'\x1b') => {
+                    self.editor_set_status_mssage("C-x esc");
+                    return Ok(());
+                }
+                ControlS => {
+                    self.editor_set_status_mssage("C-x C-s");
+                    return self.save_file(input);
+                }
+                NoOp => {}
+                _ => {
+                    self.editor_set_status_mssage("Command Not Found");
+                    return Ok(());
+                }
             }
         }
     }

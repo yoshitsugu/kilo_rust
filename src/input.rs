@@ -17,8 +17,9 @@ pub enum InputType {
     Char(u8),
     Del,
     Backspace,
-    Save,
     NoOp,
+    ControlS,
+    ControlX,
 }
 
 pub struct RawMode {
@@ -36,6 +37,7 @@ pub const CTRL_E: u8 = b'e' & 0x1f;
 pub const CTRL_H: u8 = b'h' & 0x1f;
 pub const CTRL_L: u8 = b'l' & 0x1f;
 pub const CTRL_S: u8 = b's' & 0x1f;
+pub const CTRL_X: u8 = b'x' & 0x1f;
 pub const BACKSPACE: u8 = 127;
 
 pub enum LoopStatus {
@@ -103,6 +105,7 @@ impl RawMode {
                 return Ok(Char(b'\x1b'));
             } else {
                 return match seq[0] {
+                    CTRL_X => Ok(ControlX),
                     CTRL_P => Ok(CursorMove(Up)),
                     CTRL_N => Ok(CursorMove(Down)),
                     CTRL_F => Ok(CursorMove(Right)),
@@ -112,7 +115,7 @@ impl RawMode {
                     BACKSPACE => Ok(Backspace),
                     CTRL_H => Ok(Backspace),
                     CTRL_L => unimplemented!(),
-                    CTRL_S => Ok(Save),
+                    CTRL_S => Ok(ControlS),
                     c => Ok(Char(c)),
                 };
             }
@@ -127,6 +130,9 @@ impl RawMode {
         match input_type {
             Char(b'\x1b') => {
                 return Ok(LoopStatus::CONTINUE);
+            }
+            ControlX => {
+                window.set_control_x(self)?;
             }
             Char(b'\r') => {
                 window.break_line();
@@ -144,8 +150,8 @@ impl RawMode {
                 window.move_cursor(Right);
                 window.delete_char();
             }
-            Save => {
-                window.save_file(self)?;
+            ControlS => {
+                unimplemented!();
             }
             Char(c) => {
                 window.insert_char(char::from(c));
