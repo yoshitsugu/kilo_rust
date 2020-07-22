@@ -217,7 +217,6 @@ impl Window {
                         self.text_buffer.push(chr);
                     }
                     self.text_buffer.push_str("\x1b[39m");
-                    self.text_buffer.push_str(&line[line_min..line_max]);
                 } else {
                     self.text_buffer.push_str("~");
                 }

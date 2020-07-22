@@ -1,3 +1,4 @@
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum HighlightColor {
     Normal,
     Number,
@@ -40,14 +41,28 @@ impl Highlight {
 
 fn line_to_highlight_color(line: &String) -> Vec<HighlightColor> {
     let mut highlight_row = vec![];
-    for chr in line.chars() {
-        if chr.is_digit(10) {
-            highlight_row.push(HighlightColor::Number);
+    let mut prev_sep = true;
+    for (ci, chr) in line.chars().enumerate() {
+        let prev_hl = if ci == 0 {
+            HighlightColor::Normal
         } else {
-            highlight_row.push(HighlightColor::Normal);
+            highlight_row[ci - 1]
+        };
+        if (chr.is_digit(10) && (prev_sep || prev_hl == HighlightColor::Number))
+            || (chr == '.' && prev_hl == HighlightColor::Number)
+        {
+            highlight_row.push(HighlightColor::Number);
+            prev_sep = false;
+            continue;
         }
+        highlight_row.push(HighlightColor::Normal);
+        prev_sep = is_separator(chr);
     }
     highlight_row
+}
+
+fn is_separator(chr: char) -> bool {
+    return chr.is_whitespace() || chr == '\0' || ",.()+-/*=~%<>[];".contains(chr);
 }
 
 impl From<&Vec<String>> for Highlight {
