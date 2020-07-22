@@ -1,5 +1,6 @@
 use std::io;
 
+mod highlight;
 mod input;
 mod window;
 use crate::input::*;

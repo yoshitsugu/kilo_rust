@@ -1,4 +1,7 @@
-use crate::input::{CursorMoveDirection, LoopStatus, RawMode};
+use crate::{
+    highlight::Highlight,
+    input::{CursorMoveDirection, LoopStatus, RawMode},
+};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
@@ -29,6 +32,7 @@ pub struct Window {
     pub quit_confirming: bool,
     pub search_last_match: Option<usize>,
     pub search_direction: SearchDirection,
+    pub highlight: Highlight,
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -58,6 +62,7 @@ impl Window {
                 quit_confirming: false,
                 search_last_match: None,
                 search_direction: SearchDirection::Forward,
+                highlight: Highlight { highlights: vec![] },
             }),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -110,7 +115,7 @@ impl Window {
         }
         let at = min(self.cx, self.content_buffer[self.cy].len());
         self.content_buffer[self.cy].insert(at, c);
-        self.render_buffer[self.cy] = self.to_render_line(&self.content_buffer[self.cy]);
+        self.editor_update_row(self.cy);
         self.cx += 1;
         self.dirty = true;
     }
@@ -125,13 +130,12 @@ impl Window {
         if self.cx > 0 {
             self.content_buffer[self.cy].remove(self.cx - 1);
             self.cx -= 1;
-            self.render_buffer[self.cy] = self.to_render_line(&self.content_buffer[self.cy]);
+            self.editor_update_row(self.cy);
         } else {
             self.cx = self.content_buffer[self.cy - 1].len();
             let line = &self.content_buffer[self.cy].clone();
             self.content_buffer[self.cy - 1].push_str(&line);
-            self.render_buffer[self.cy - 1] =
-                self.to_render_line(&self.content_buffer[self.cy - 1]);
+            self.editor_update_row(self.cy - 1);
             self.content_buffer.remove(self.cy);
             self.render_buffer.remove(self.cy);
             self.cy -= 1;
@@ -145,9 +149,8 @@ impl Window {
         let rest = &line[self.cx..line.len()];
         self.content_buffer[self.cy] = remain.to_string();
         self.content_buffer.insert(self.cy + 1, rest.to_string());
-        self.render_buffer[self.cy] = self.to_render_line(&remain.to_string());
-        self.render_buffer
-            .insert(self.cy + 1, self.to_render_line(&rest.to_string()));
+        self.editor_insert_row(self.cy + 1);
+        self.editor_update_row(self.cy);
         self.cy += 1;
         self.cx = 0;
         self.dirty = true;
@@ -203,6 +206,17 @@ impl Window {
                     } else {
                         0
                     };
+                    self.text_buffer.push_str("\x1b[39m");
+                    let mut last_color = 39;
+                    for (ci, chr) in line[line_min..line_max].chars().enumerate() {
+                        let color = self.highlight.color(filerow, ci + line_min);
+                        if last_color != color {
+                            self.text_buffer.push_str(&format!("\x1b[{}m", color));
+                            last_color = color;
+                        }
+                        self.text_buffer.push(chr);
+                    }
+                    self.text_buffer.push_str("\x1b[39m");
                     self.text_buffer.push_str(&line[line_min..line_max]);
                 } else {
                     self.text_buffer.push_str("~");
@@ -329,6 +343,7 @@ impl Window {
     }
 
     pub fn open_file(&mut self, filename: String) -> io::Result<()> {
+        use crate::highlight::*;
         use std::fs::canonicalize;
         use std::path::Path;
         self.filename = Some(canonicalize(Path::new(&filename))?);
@@ -337,6 +352,7 @@ impl Window {
             self.render_buffer.push(self.to_render_line(&line));
             self.content_buffer.push(line);
         }
+        self.highlight = Highlight::from(&self.content_buffer);
         Ok(())
     }
 
@@ -539,6 +555,17 @@ impl Window {
             }
         }
         string
+    }
+
+    fn editor_update_row(&mut self, at: usize) {
+        self.render_buffer[at] = self.to_render_line(&self.content_buffer[at]);
+        self.highlight.update_row(at, &self.content_buffer[at]);
+    }
+
+    fn editor_insert_row(&mut self, at: usize) {
+        self.render_buffer
+            .insert(at, self.to_render_line(&self.content_buffer[at]));
+        self.highlight.insert_row(at, &self.content_buffer[at]);
     }
 
     pub fn quit(&mut self) -> io::Result<LoopStatus> {
