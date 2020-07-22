@@ -330,7 +330,12 @@ impl Window {
         Ok(())
     }
 
-    fn editor_prompt(&mut self, input: &mut RawMode, format: &str) -> io::Result<Option<String>> {
+    fn editor_prompt(
+        &mut self,
+        input: &mut RawMode,
+        format: &str,
+        callback: Option<fn(&mut Self, &str, u8)>,
+    ) -> io::Result<Option<String>> {
         use crate::input::InputType::*;
         let mut prompt_buffer = String::new();
         loop {
@@ -341,10 +346,16 @@ impl Window {
             match input_type {
                 Char(b'\x1b') => {
                     self.editor_set_status_mssage(String::new());
+                    if let Some(cb) = callback {
+                        cb(self, &prompt_buffer, b'\x1b');
+                    }
                     return Ok(None);
                 }
                 Char(b'\r') => {
                     self.editor_set_status_mssage(String::new());
+                    if let Some(cb) = callback {
+                        cb(self, &prompt_buffer, b'\r');
+                    }
                     return Ok(Some(prompt_buffer));
                 }
                 Backspace | Del => {
@@ -354,6 +365,9 @@ impl Window {
                 }
                 Char(c) => {
                     prompt_buffer.push(char::from(c));
+                    if let Some(cb) = callback {
+                        cb(self, &prompt_buffer, c);
+                    }
                 }
                 _ => {}
             }
@@ -392,7 +406,7 @@ impl Window {
         if self.filename.is_some() {
             filename = self.filename.clone().unwrap();
         } else {
-            let result = self.editor_prompt(input, "Save as {} (ESC to cancel)")?;
+            let result = self.editor_prompt(input, "Save as {} (ESC to cancel)", None)?;
             if let Some(f) = result {
                 filename = canonicalize(Path::new(&f))?;
             } else {
@@ -415,12 +429,10 @@ impl Window {
         Ok(())
     }
 
-    pub fn editor_find(&mut self, input: &mut RawMode) -> io::Result<()> {
-        let query = self.editor_prompt(input, "Search {} (ESC to cancel)")?;
-        if query.is_none() {
-            return Ok(());
+    fn editor_find_callback(&mut self, query: &str, key: u8) {
+        if key == b'\r' || key == b'\x1b' {
+            return;
         }
-        let query = query.unwrap();
         for (i, line) in self.render_buffer.iter().enumerate() {
             if let Some(index) = line.find(&query) {
                 self.cx = self.rx_to_cx(index, &self.content_buffer[i]);
@@ -429,6 +441,14 @@ impl Window {
                 break;
             }
         }
+    }
+
+    pub fn editor_find(&mut self, input: &mut RawMode) -> io::Result<()> {
+        self.editor_prompt(
+            input,
+            "Search {} (ESC to cancel)",
+            Some(Window::editor_find_callback),
+        )?;
         Ok(())
     }
 
