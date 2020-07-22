@@ -511,6 +511,8 @@ impl Window {
                 self.cx = self.rx_to_cx(index, &self.content_buffer[current]);
                 self.cy = current;
                 self.row_offset = current;
+                self.highlight
+                    .match_row(current, self.cx, self.cx + query.len());
                 break;
             }
         }
@@ -537,6 +539,7 @@ impl Window {
             self.col_offset = saved_col_offset;
             self.row_offset = saved_row_offset;
         }
+        self.highlight = Highlight::from(&self.content_buffer);
         Ok(())
     }
 
