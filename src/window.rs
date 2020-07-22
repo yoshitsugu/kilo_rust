@@ -444,11 +444,21 @@ impl Window {
     }
 
     pub fn editor_find(&mut self, input: &mut RawMode) -> io::Result<()> {
-        self.editor_prompt(
+        let saved_cx = self.cx;
+        let saved_cy = self.cy;
+        let saved_col_offset = self.col_offset;
+        let saved_row_offset = self.row_offset;
+        let query = self.editor_prompt(
             input,
             "Search {} (ESC to cancel)",
             Some(Window::editor_find_callback),
         )?;
+        if query.is_none() {
+            self.cx = saved_cx;
+            self.cy = saved_cy;
+            self.col_offset = saved_col_offset;
+            self.row_offset = saved_row_offset;
+        }
         Ok(())
     }
 
