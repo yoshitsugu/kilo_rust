@@ -19,6 +19,7 @@ pub enum InputType {
     Backspace,
     NoOp,
     ControlS,
+    ControlR,
     ControlX,
 }
 
@@ -38,6 +39,7 @@ pub const CTRL_H: u8 = b'h' & 0x1f;
 pub const CTRL_L: u8 = b'l' & 0x1f;
 pub const CTRL_S: u8 = b's' & 0x1f;
 pub const CTRL_X: u8 = b'x' & 0x1f;
+pub const CTRL_R: u8 = b'r' & 0x1f;
 pub const BACKSPACE: u8 = 127;
 
 pub enum LoopStatus {
@@ -116,6 +118,7 @@ impl RawMode {
                     CTRL_H => Ok(Backspace),
                     CTRL_L => unimplemented!(),
                     CTRL_S => Ok(ControlS),
+                    CTRL_R => Ok(ControlR),
                     c => Ok(Char(c)),
                 };
             }
@@ -151,7 +154,10 @@ impl RawMode {
                 window.delete_char();
             }
             ControlS => {
-                window.editor_find(self)?;
+                window.editor_find(self, true)?;
+            }
+            ControlR => {
+                window.editor_find(self, false)?;
             }
             Char(c) => {
                 window.insert_char(char::from(c));

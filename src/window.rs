@@ -4,6 +4,12 @@ use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+#[derive(PartialEq, Eq)]
+pub enum SearchDirection {
+    Forward,
+    Backward,
+}
+
 pub struct Window {
     pub cx: usize, // 文字列上でのカーソル位置
     pub rx: usize, // 実際にレンダリングされたカーソル位置
@@ -21,6 +27,8 @@ pub struct Window {
     pub message_time: Instant,
     pub dirty: bool,
     pub quit_confirming: bool,
+    pub search_last_match: Option<usize>,
+    pub search_direction: SearchDirection,
 }
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -48,6 +56,8 @@ impl Window {
                 message_time: Instant::now(),
                 dirty: false,
                 quit_confirming: false,
+                search_last_match: None,
+                search_direction: SearchDirection::Forward,
             }),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -369,6 +379,16 @@ impl Window {
                         cb(self, &prompt_buffer, c);
                     }
                 }
+                ControlS => {
+                    if let Some(cb) = callback {
+                        cb(self, &prompt_buffer, crate::input::CTRL_S);
+                    }
+                }
+                ControlR => {
+                    if let Some(cb) = callback {
+                        cb(self, &prompt_buffer, crate::input::CTRL_R);
+                    }
+                }
                 _ => {}
             }
         }
@@ -430,27 +450,69 @@ impl Window {
     }
 
     fn editor_find_callback(&mut self, query: &str, key: u8) {
-        if key == b'\r' || key == b'\x1b' {
-            return;
+        match key {
+            b'\r' | b'\x1b' => {
+                self.search_direction = SearchDirection::Forward;
+                self.search_last_match = None;
+                return;
+            }
+            crate::input::CTRL_S => {
+                self.search_direction = SearchDirection::Forward;
+            }
+            crate::input::CTRL_R => {
+                self.search_direction = SearchDirection::Backward;
+            }
+            _ => {
+                self.search_direction = SearchDirection::Forward;
+                self.search_last_match = None;
+            }
         }
-        for (i, line) in self.render_buffer.iter().enumerate() {
+        if self.search_last_match.is_none() {
+            self.search_direction = SearchDirection::Forward;
+        }
+        let mut current = self.search_last_match.unwrap_or(0);
+        for i in 0..self.render_buffer.len() {
+            if i == 0 && self.search_last_match.is_none() {
+                current = 0
+            } else {
+                if self.search_direction == SearchDirection::Forward {
+                    if current + 1 == self.content_buffer.len() {
+                        current = 0;
+                    } else {
+                        current += 1;
+                    }
+                } else {
+                    if current == 0 {
+                        current = self.content_buffer.len() - 1
+                    } else {
+                        current -= 1;
+                    }
+                }
+            }
+            let line = &self.render_buffer[current];
             if let Some(index) = line.find(&query) {
-                self.cx = self.rx_to_cx(index, &self.content_buffer[i]);
-                self.cy = i;
-                self.row_offset = i;
+                self.search_last_match = Some(current);
+                self.cx = self.rx_to_cx(index, &self.content_buffer[current]);
+                self.cy = current;
+                self.row_offset = current;
                 break;
             }
         }
     }
 
-    pub fn editor_find(&mut self, input: &mut RawMode) -> io::Result<()> {
+    pub fn editor_find(&mut self, input: &mut RawMode, direction_forward: bool) -> io::Result<()> {
         let saved_cx = self.cx;
         let saved_cy = self.cy;
         let saved_col_offset = self.col_offset;
         let saved_row_offset = self.row_offset;
+        self.search_direction = if direction_forward {
+            SearchDirection::Forward
+        } else {
+            SearchDirection::Backward
+        };
         let query = self.editor_prompt(
             input,
-            "Search {} (ESC to cancel)",
+            "Search {} (cancel: ESC, forward: C-s, backward: C-r)",
             Some(Window::editor_find_callback),
         )?;
         if query.is_none() {
