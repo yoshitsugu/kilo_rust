@@ -194,6 +194,8 @@ impl Window {
                         0
                     };
                     self.text_buffer.push_str(&line[line_min..line_max]);
+                } else {
+                    self.text_buffer.push_str("~");
                 }
             }
             self.text_buffer.push_str("\x1b[K");
@@ -283,6 +285,20 @@ impl Window {
         rx
     }
 
+    fn rx_to_cx(&self, rx: usize, line: &String) -> usize {
+        let mut cur_rx = 0;
+        for (cx, rc) in line.chars().enumerate() {
+            if rc == '\t' {
+                cur_rx += (KILO_TAB_STOP - 1) - (cur_rx % KILO_TAB_STOP);
+            }
+            cur_rx += 1;
+            if cur_rx > rx {
+                return cx;
+            }
+        }
+        return line.len();
+    }
+
     pub fn editor_scroll(&mut self) {
         self.rx = 0;
         if self.cy < self.content_buffer.len() {
@@ -370,14 +386,15 @@ impl Window {
     }
 
     pub fn save_file(&mut self, input: &mut RawMode) -> io::Result<()> {
-        let mut filename;
+        use std::fs::canonicalize;
+        use std::path::Path;
+        let filename;
         if self.filename.is_some() {
             filename = self.filename.clone().unwrap();
         } else {
             let result = self.editor_prompt(input, "Save as {} (ESC to cancel)")?;
             if let Some(f) = result {
-                filename = PathBuf::new();
-                filename.push(&f);
+                filename = canonicalize(Path::new(&f))?;
             } else {
                 self.editor_set_status_mssage("Save aborted");
                 return Ok(());
@@ -394,6 +411,23 @@ impl Window {
         self.dirty = false;
         if self.filename.is_none() {
             self.filename = Some(filename);
+        }
+        Ok(())
+    }
+
+    pub fn editor_find(&mut self, input: &mut RawMode) -> io::Result<()> {
+        let query = self.editor_prompt(input, "Search {} (ESC to cancel)")?;
+        if query.is_none() {
+            return Ok(());
+        }
+        let query = query.unwrap();
+        for (i, line) in self.render_buffer.iter().enumerate() {
+            if let Some(index) = line.find(&query) {
+                self.cx = self.rx_to_cx(index, &self.content_buffer[i]);
+                self.cy = i;
+                self.row_offset = i;
+                break;
+            }
         }
         Ok(())
     }

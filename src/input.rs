@@ -151,7 +151,7 @@ impl RawMode {
                 window.delete_char();
             }
             ControlS => {
-                unimplemented!();
+                window.editor_find(self)?;
             }
             Char(c) => {
                 window.insert_char(char::from(c));

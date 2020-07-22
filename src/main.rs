@@ -13,7 +13,7 @@ fn main() -> io::Result<()> {
         window.open_file(args[1].to_string())?;
     }
 
-    window.editor_set_status_mssage("HELP: Ctrl-S = save | Ctrl-Q = quit");
+    window.editor_set_status_mssage("HELP: Ctrl-X Ctrl-S = save | Ctrl-Q = quit | Ctrl-S = search");
 
     loop {
         window.refresh_screen()?;
