@@ -469,7 +469,12 @@ impl Window {
         self.editor_set_status_mssage(format!("{} bytes written to disk", written_bytes));
         self.dirty = false;
         if self.filename.is_none() {
-            self.filename = Some(canonicalize(filename)?);
+            let canonicalized_path = canonicalize(filename)?;
+            self.filename = Some(canonicalized_path.clone());
+            self.highlight = Highlight::new(&self.content_buffer, canonicalized_path);
+            for r in 0..self.content_buffer.len() {
+                self.editor_update_row(r);
+            }
         }
         Ok(())
     }
