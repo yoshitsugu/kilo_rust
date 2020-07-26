@@ -1,5 +1,9 @@
+#[macro_use]
+extern crate bitflags;
+
 use std::io;
 
+mod file_syntax;
 mod highlight;
 mod input;
 mod window;

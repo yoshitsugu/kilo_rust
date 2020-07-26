@@ -62,7 +62,10 @@ impl Window {
                 quit_confirming: false,
                 search_last_match: None,
                 search_direction: SearchDirection::Forward,
-                highlight: Highlight { highlights: vec![] },
+                highlight: Highlight {
+                    syntax: crate::file_syntax::FileSyntax::new(),
+                    highlights: vec![],
+                },
             }),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -83,7 +86,13 @@ impl Window {
         };
         let dirty_symbol = if self.dirty { "*" } else { "" };
         let status_left = format!("{}{}", filename, dirty_symbol);
-        let status_right = format!("{}/{}", self.cy + 1, self.content_buffer.len());
+        let file_type = self.highlight.syntax.ftype;
+        let status_right = format!(
+            "{} | {}/{}",
+            file_type,
+            self.cy + 1,
+            self.content_buffer.len()
+        );
         self.text_buffer.push_str(&format!(
             "\x1b[7m{}{}{}\x1b[m\r\n",
             status_left,
@@ -345,13 +354,14 @@ impl Window {
         use crate::highlight::*;
         use std::fs::canonicalize;
         use std::path::Path;
-        self.filename = Some(canonicalize(Path::new(&filename))?);
+        let canonicalized_path = canonicalize(Path::new(&filename))?;
+        self.filename = Some(canonicalized_path.clone());
         for line in BufReader::new(File::open(filename)?).lines() {
             let line = line?;
             self.render_buffer.push(self.to_render_line(&line));
             self.content_buffer.push(line);
         }
-        self.highlight = Highlight::from(&self.content_buffer);
+        self.highlight = Highlight::new(&self.content_buffer, canonicalized_path);
         Ok(())
     }
 
@@ -522,6 +532,7 @@ impl Window {
         let saved_cy = self.cy;
         let saved_col_offset = self.col_offset;
         let saved_row_offset = self.row_offset;
+        let saved_highlight = self.highlight.highlights.clone();
         self.search_direction = if direction_forward {
             SearchDirection::Forward
         } else {
@@ -538,7 +549,7 @@ impl Window {
             self.col_offset = saved_col_offset;
             self.row_offset = saved_row_offset;
         }
-        self.highlight = Highlight::from(&self.content_buffer);
+        self.highlight.highlights = saved_highlight;
         Ok(())
     }
 

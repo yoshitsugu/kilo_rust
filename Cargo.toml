@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 termios = "0.3"
 libc = "0.2.72"
+once_cell = "1.4.0"
+bitflags = "1.2.1"

@@ -1,3 +1,6 @@
+use crate::file_syntax::{FileSyntax, FileType, SyntaxFlags, SYNTAX_DB};
+use std::path::PathBuf;
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum HighlightColor {
     Normal,
@@ -6,12 +9,33 @@ pub enum HighlightColor {
 }
 
 pub struct Highlight {
+    pub syntax: FileSyntax,
     pub highlights: Vec<Vec<HighlightColor>>,
 }
 
+fn get_syntax(path: PathBuf) -> FileSyntax {
+    match SYNTAX_DB.get(path.extension().unwrap_or(std::ffi::OsStr::new(""))) {
+        Some(syntax) => *syntax,
+        None => FileSyntax::new(),
+    }
+}
+
 impl Highlight {
+    pub fn new(s: &Vec<String>, path: PathBuf) -> Self {
+        let syntax = get_syntax(path);
+        let h = Highlight {
+            syntax,
+            highlights: vec![],
+        };
+        let mut highlights = vec![];
+        for line in s {
+            highlights.push(h.line_to_highlight_color(&line));
+        }
+        Highlight { syntax, highlights }
+    }
+
     pub fn update_row(&mut self, row_index: usize, line: &String) {
-        self.highlights[row_index] = line_to_highlight_color(line);
+        self.highlights[row_index] = self.line_to_highlight_color(line);
     }
 
     pub fn match_row(&mut self, row_index: usize, from: usize, to: usize) {
@@ -23,7 +47,7 @@ impl Highlight {
 
     pub fn insert_row(&mut self, row_index: usize, line: &String) {
         self.highlights
-            .insert(row_index, line_to_highlight_color(line));
+            .insert(row_index, self.line_to_highlight_color(line));
     }
 
     pub fn color(&self, row_index: usize, col_index: usize) -> u8 {
@@ -37,40 +61,36 @@ impl Highlight {
             None => 39,
         }
     }
-}
 
-fn line_to_highlight_color(line: &String) -> Vec<HighlightColor> {
-    let mut highlight_row = vec![];
-    let mut prev_sep = true;
-    for (ci, chr) in line.chars().enumerate() {
-        let prev_hl = if ci == 0 {
-            HighlightColor::Normal
-        } else {
-            highlight_row[ci - 1]
-        };
-        if (chr.is_digit(10) && (prev_sep || prev_hl == HighlightColor::Number))
-            || (chr == '.' && prev_hl == HighlightColor::Number)
-        {
-            highlight_row.push(HighlightColor::Number);
-            prev_sep = false;
-            continue;
+    fn line_to_highlight_color(&self, line: &String) -> Vec<HighlightColor> {
+        let mut highlight_row = vec![];
+        let mut prev_sep = true;
+        for (ci, chr) in line.chars().enumerate() {
+            if self.syntax.ftype == FileType::Undefined {
+                highlight_row.push(HighlightColor::Normal);
+                continue;
+            }
+            let prev_hl = if ci == 0 {
+                HighlightColor::Normal
+            } else {
+                highlight_row[ci - 1]
+            };
+            if self.syntax.flags == SyntaxFlags::HL_NUMBER {
+                if (chr.is_digit(10) && (prev_sep || prev_hl == HighlightColor::Number))
+                    || (chr == '.' && prev_hl == HighlightColor::Number)
+                {
+                    highlight_row.push(HighlightColor::Number);
+                    prev_sep = false;
+                    continue;
+                }
+            }
+            highlight_row.push(HighlightColor::Normal);
+            prev_sep = is_separator(chr);
         }
-        highlight_row.push(HighlightColor::Normal);
-        prev_sep = is_separator(chr);
+        highlight_row
     }
-    highlight_row
 }
 
 fn is_separator(chr: char) -> bool {
     return chr.is_whitespace() || chr == '\0' || ",.()+-/*=~%<>[];".contains(chr);
-}
-
-impl From<&Vec<String>> for Highlight {
-    fn from(s: &Vec<String>) -> Self {
-        let mut highlights = vec![];
-        for line in s {
-            highlights.push(line_to_highlight_color(&line));
-        }
-        Highlight { highlights }
-    }
 }
