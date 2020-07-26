@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub enum HighlightColor {
     Normal,
     Number,
+    String,
     Match,
 }
 
@@ -55,6 +56,7 @@ impl Highlight {
             Some(row) => match row.get(col_index) {
                 Some(HighlightColor::Normal) => 37,
                 Some(HighlightColor::Number) => 31,
+                Some(HighlightColor::String) => 35,
                 Some(HighlightColor::Match) => 34,
                 None => 39,
             },
@@ -65,9 +67,15 @@ impl Highlight {
     fn line_to_highlight_color(&self, line: &String) -> Vec<HighlightColor> {
         let mut highlight_row = vec![];
         let mut prev_sep = true;
+        let mut in_string: Option<char> = None;
+        let mut skip = 0;
         for (ci, chr) in line.chars().enumerate() {
             if self.syntax.ftype == FileType::Undefined {
                 highlight_row.push(HighlightColor::Normal);
+                continue;
+            }
+            if skip > 0 {
+                skip -= 1;
                 continue;
             }
             let prev_hl = if ci == 0 {
@@ -75,7 +83,31 @@ impl Highlight {
             } else {
                 highlight_row[ci - 1]
             };
-            if self.syntax.flags == SyntaxFlags::HL_NUMBER {
+            if (self.syntax.flags & SyntaxFlags::HL_STRING).bits() != 0 {
+                match in_string {
+                    Some(quotation) => {
+                        highlight_row.push(HighlightColor::String);
+                        if chr == '\\' && ci + 1 < line.len() {
+                            highlight_row.push(HighlightColor::String);
+                            skip = 1;
+                            continue;
+                        }
+                        if quotation == chr {
+                            in_string = None;
+                        }
+                        prev_sep = true;
+                        continue;
+                    }
+                    None => {
+                        if chr == '"' || chr == '\'' {
+                            in_string = Some(chr);
+                            highlight_row.push(HighlightColor::String);
+                            continue;
+                        }
+                    }
+                }
+            }
+            if (self.syntax.flags & SyntaxFlags::HL_NUMBER).bits() != 0 {
                 if (chr.is_digit(10) && (prev_sep || prev_hl == HighlightColor::Number))
                     || (chr == '.' && prev_hl == HighlightColor::Number)
                 {

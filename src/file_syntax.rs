@@ -20,7 +20,8 @@ impl fmt::Display for FileType {
 
 bitflags! {
     pub struct SyntaxFlags: u16 {
-      const HL_NUMBER = 1 << 8;
+      const HL_NUMBER = 1 << 0;
+      const HL_STRING = 1 << 1;
     }
 }
 
@@ -48,7 +49,7 @@ pub static SYNTAX_DB: Lazy<HashMap<&std::ffi::OsStr, FileSyntax>> = Lazy::new(||
     let syntaxes = vec![FileSyntax {
         ftype: C,
         extensions: ["c", "cpp", "h", "", ""],
-        flags: SyntaxFlags::HL_NUMBER,
+        flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
     }];
     for s in syntaxes {
         for ext in s.extensions.iter() {
