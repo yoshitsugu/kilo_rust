@@ -120,7 +120,7 @@ impl Window {
         use std::cmp::min;
         if self.cy == self.content_buffer.len() {
             self.content_buffer.push(String::new());
-            self.render_buffer.push(String::new());
+            self.editor_insert_row(0);
         }
         let at = min(self.cx, self.content_buffer[self.cy].len());
         self.content_buffer[self.cy].insert(at, c);
@@ -446,14 +446,14 @@ impl Window {
 
     pub fn save_file(&mut self, input: &mut RawMode) -> io::Result<()> {
         use std::fs::canonicalize;
-        use std::path::Path;
-        let filename;
+        let mut filename;
         if self.filename.is_some() {
             filename = self.filename.clone().unwrap();
         } else {
             let result = self.editor_prompt(input, "Save as {} (ESC to cancel)", None)?;
             if let Some(f) = result {
-                filename = canonicalize(Path::new(&f))?;
+                filename = PathBuf::new();
+                filename.push(f);
             } else {
                 self.editor_set_status_mssage("Save aborted");
                 return Ok(());
@@ -469,7 +469,7 @@ impl Window {
         self.editor_set_status_mssage(format!("{} bytes written to disk", written_bytes));
         self.dirty = false;
         if self.filename.is_none() {
-            self.filename = Some(filename);
+            self.filename = Some(canonicalize(filename)?);
         }
         Ok(())
     }
