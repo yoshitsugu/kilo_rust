@@ -218,12 +218,25 @@ impl Window {
                     self.text_buffer.push_str("\x1b[39m");
                     let mut last_color = 39;
                     for (ci, chr) in line[line_min..line_max].chars().enumerate() {
-                        let color = self.highlight.color(filerow, ci + line_min);
-                        if last_color != color {
-                            self.text_buffer.push_str(&format!("\x1b[{}m", color));
-                            last_color = color;
+                        if chr.is_control() {
+                            let mut bytes = [0; 2];
+                            chr.encode_utf8(&mut bytes);
+                            // Ctrl-A to Ctrl-Z
+                            let converted_chr = if bytes[0] <= 26 {
+                                char::from(bytes[0] + b'@')
+                            } else {
+                                '?'
+                            };
+                            self.text_buffer
+                                .push_str(&format!("\x1b[7m{}\x1b[m", converted_chr));
+                        } else {
+                            let color = self.highlight.color(filerow, ci + line_min);
+                            if last_color != color {
+                                self.text_buffer.push_str(&format!("\x1b[{}m", color));
+                                last_color = color;
+                            }
+                            self.text_buffer.push(chr);
                         }
-                        self.text_buffer.push(chr);
                     }
                     self.text_buffer.push_str("\x1b[39m");
                 } else {
