@@ -28,7 +28,9 @@ bitflags! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileSyntax {
     pub ftype: FileType,
-    pub extensions: [&'static str; 5],
+    pub extensions: &'static [&'static str],
+    pub singleline_comment_start: &'static str,
+    pub keywords: &'static [&'static str],
     pub flags: SyntaxFlags,
 }
 
@@ -36,11 +38,40 @@ impl FileSyntax {
     pub fn new() -> FileSyntax {
         FileSyntax {
             ftype: FileType::Undefined,
-            extensions: [""; 5],
+            extensions: &[],
+            singleline_comment_start: "#",
+            keywords: &[],
             flags: SyntaxFlags::empty(),
         }
     }
 }
+const C_EXTENSIONS: [&'static str; 3] = ["c", "cpp", "h"];
+
+const C_KEYWEORDS: [&'static str; 23] = [
+    "switch",
+    "if",
+    "while",
+    "for",
+    "break",
+    "continue",
+    "return",
+    "else",
+    "struct",
+    "union",
+    "typedef",
+    "static",
+    "enum",
+    "class",
+    "case",
+    "int|",
+    "long|",
+    "double|",
+    "float|",
+    "char|",
+    "unsigned|",
+    "signed|",
+    "void|",
+];
 
 pub static SYNTAX_DB: Lazy<HashMap<&std::ffi::OsStr, FileSyntax>> = Lazy::new(|| {
     use FileType::*;
@@ -48,14 +79,14 @@ pub static SYNTAX_DB: Lazy<HashMap<&std::ffi::OsStr, FileSyntax>> = Lazy::new(||
 
     let syntaxes = vec![FileSyntax {
         ftype: C,
-        extensions: ["c", "cpp", "h", "", ""],
+        extensions: &C_EXTENSIONS,
+        singleline_comment_start: "//",
+        keywords: &C_KEYWEORDS,
         flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
     }];
     for s in syntaxes {
         for ext in s.extensions.iter() {
-            if ext.len() > 0 {
-                result.insert(std::ffi::OsStr::new(ext.clone()), s);
-            }
+            result.insert(std::ffi::OsStr::new(ext.clone()), s);
         }
     }
     result

@@ -6,6 +6,9 @@ pub enum HighlightColor {
     Normal,
     Number,
     String,
+    Comment,
+    Keyword1,
+    Keyword2,
     Match,
 }
 
@@ -57,6 +60,9 @@ impl Highlight {
                 Some(HighlightColor::Normal) => 37,
                 Some(HighlightColor::Number) => 31,
                 Some(HighlightColor::String) => 35,
+                Some(HighlightColor::Comment) => 36,
+                Some(HighlightColor::Keyword1) => 33,
+                Some(HighlightColor::Keyword2) => 32,
                 Some(HighlightColor::Match) => 34,
                 None => 39,
             },
@@ -69,6 +75,7 @@ impl Highlight {
         let mut prev_sep = true;
         let mut in_string: Option<char> = None;
         let mut skip = 0;
+        let scs = self.syntax.singleline_comment_start;
         for (ci, chr) in line.chars().enumerate() {
             if self.syntax.ftype == FileType::Undefined {
                 highlight_row.push(HighlightColor::Normal);
@@ -83,6 +90,19 @@ impl Highlight {
             } else {
                 highlight_row[ci - 1]
             };
+
+            if scs.len() > 0
+                && in_string.is_none()
+                && line.len() > scs.len()
+                && ci < line.len() - scs.len()
+            {
+                if &line[ci..ci + scs.len()] == scs {
+                    for _ in 0..line.len() - ci {
+                        highlight_row.push(HighlightColor::Comment);
+                    }
+                    break;
+                }
+            }
             if (self.syntax.flags & SyntaxFlags::HL_STRING).bits() != 0 {
                 match in_string {
                     Some(quotation) => {
@@ -112,6 +132,36 @@ impl Highlight {
                     || (chr == '.' && prev_hl == HighlightColor::Number)
                 {
                     highlight_row.push(HighlightColor::Number);
+                    prev_sep = false;
+                    continue;
+                }
+            }
+            if prev_sep {
+                for keyword in self.syntax.keywords {
+                    let mut is_kw2 = false;
+                    let mut kw = *keyword;
+                    if keyword.ends_with("|") {
+                        kw = &keyword[0..keyword.len() - 1];
+                        is_kw2 = true;
+                    }
+                    if line[ci..].len() < kw.len() + 1 {
+                        continue;
+                    }
+                    if &line[ci..ci + kw.len()] == kw
+                        && is_separator(line.chars().nth(ci + kw.len()).unwrap())
+                    {
+                        for _ in 0..kw.len() {
+                            if is_kw2 {
+                                highlight_row.push(HighlightColor::Keyword2);
+                            } else {
+                                highlight_row.push(HighlightColor::Keyword1);
+                            }
+                        }
+                        skip = kw.len() - 1;
+                        break;
+                    }
+                }
+                if skip > 0 {
                     prev_sep = false;
                     continue;
                 }
