@@ -66,6 +66,7 @@ impl Window {
                 highlight: Highlight {
                     syntax: crate::file_syntax::FileSyntax::new(),
                     highlights: vec![],
+                    in_comment: vec![],
                 },
             }),
             Ok(_) => Err(io::Error::new(
@@ -148,6 +149,7 @@ impl Window {
             self.editor_update_row(self.cy - 1);
             self.content_buffer.remove(self.cy);
             self.render_buffer.remove(self.cy);
+            self.highlight.remove_row(self.cy);
             self.cy -= 1;
         }
         self.dirty = true;
@@ -594,13 +596,27 @@ impl Window {
 
     fn editor_update_row(&mut self, at: usize) {
         self.render_buffer[at] = self.to_render_line(&self.content_buffer[at]);
-        self.highlight.update_row(at, &self.content_buffer[at]);
+        if let Some(need_to_update_index) = self.highlight.update_row(at, &self.content_buffer[at])
+        {
+            if need_to_update_index < self.content_buffer.len()
+                && need_to_update_index < self.highlight.highlights.len()
+            {
+                self.editor_update_row(need_to_update_index);
+            }
+        }
     }
 
     fn editor_insert_row(&mut self, at: usize) {
         self.render_buffer
             .insert(at, self.to_render_line(&self.content_buffer[at]));
-        self.highlight.insert_row(at, &self.content_buffer[at]);
+        if let Some(need_to_update_index) = self.highlight.insert_row(at, &self.content_buffer[at])
+        {
+            if need_to_update_index < self.content_buffer.len()
+                && need_to_update_index < self.highlight.highlights.len()
+            {
+                self.editor_update_row(need_to_update_index);
+            }
+        }
     }
 
     pub fn quit(&mut self) -> io::Result<LoopStatus> {

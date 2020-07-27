@@ -7,6 +7,7 @@ pub enum HighlightColor {
     Number,
     String,
     Comment,
+    MultilineComment,
     Keyword1,
     Keyword2,
     Match,
@@ -15,6 +16,7 @@ pub enum HighlightColor {
 pub struct Highlight {
     pub syntax: FileSyntax,
     pub highlights: Vec<Vec<HighlightColor>>,
+    pub in_comment: Vec<bool>,
 }
 
 fn get_syntax(path: PathBuf) -> FileSyntax {
@@ -27,19 +29,32 @@ fn get_syntax(path: PathBuf) -> FileSyntax {
 impl Highlight {
     pub fn new(s: &Vec<String>, path: PathBuf) -> Self {
         let syntax = get_syntax(path);
-        let h = Highlight {
+        let mut h = Highlight {
             syntax,
             highlights: vec![],
+            in_comment: vec![],
         };
-        let mut highlights = vec![];
-        for line in s {
-            highlights.push(h.line_to_highlight_color(&line));
+        for (index, line) in s.into_iter().enumerate() {
+            h.highlights.push(vec![]);
+            h.in_comment.push(false);
+            match h.line_to_highlight_color(&line, index) {
+                (row, _) => h.highlights[index] = row,
+            }
         }
-        Highlight { syntax, highlights }
+        h
     }
 
-    pub fn update_row(&mut self, row_index: usize, line: &String) {
-        self.highlights[row_index] = self.line_to_highlight_color(line);
+    pub fn update_row(&mut self, row_index: usize, line: &String) -> Option<usize> {
+        match self.line_to_highlight_color(line, row_index) {
+            (row, Some(need_to_update_index)) => {
+                self.highlights[row_index] = row;
+                Some(need_to_update_index)
+            }
+            (row, None) => {
+                self.highlights[row_index] = row;
+                None
+            }
+        }
     }
 
     pub fn match_row(&mut self, row_index: usize, from: usize, to: usize) {
@@ -49,9 +64,24 @@ impl Highlight {
         }
     }
 
-    pub fn insert_row(&mut self, row_index: usize, line: &String) {
-        self.highlights
-            .insert(row_index, self.line_to_highlight_color(line));
+    pub fn insert_row(&mut self, row_index: usize, line: &String) -> Option<usize> {
+        self.highlights.insert(row_index, vec![]);
+        self.in_comment.push(false);
+        match self.line_to_highlight_color(line, row_index) {
+            (row, Some(need_to_update_index)) => {
+                self.highlights[row_index] = row;
+                Some(need_to_update_index)
+            }
+            (row, None) => {
+                self.highlights[row_index] = row;
+                None
+            }
+        }
+    }
+
+    pub fn remove_row(&mut self, row_index: usize) {
+        self.highlights.remove(row_index);
+        self.in_comment.remove(row_index);
     }
 
     pub fn color(&self, row_index: usize, col_index: usize) -> u8 {
@@ -61,6 +91,7 @@ impl Highlight {
                 Some(HighlightColor::Number) => 31,
                 Some(HighlightColor::String) => 35,
                 Some(HighlightColor::Comment) => 36,
+                Some(HighlightColor::MultilineComment) => 36,
                 Some(HighlightColor::Keyword1) => 33,
                 Some(HighlightColor::Keyword2) => 32,
                 Some(HighlightColor::Match) => 34,
@@ -70,12 +101,19 @@ impl Highlight {
         }
     }
 
-    fn line_to_highlight_color(&self, line: &String) -> Vec<HighlightColor> {
+    fn line_to_highlight_color(
+        &mut self,
+        line: &String,
+        row_index: usize,
+    ) -> (Vec<HighlightColor>, Option<usize>) {
         let mut highlight_row = vec![];
         let mut prev_sep = true;
         let mut in_string: Option<char> = None;
+        let mut in_comment = row_index > 0 && self.in_comment[row_index - 1];
         let mut skip = 0;
         let scs = self.syntax.singleline_comment_start;
+        let mcs = self.syntax.multiline_comment_start;
+        let mce = self.syntax.multiline_comment_end;
         for (ci, chr) in line.chars().enumerate() {
             if self.syntax.ftype == FileType::Undefined {
                 highlight_row.push(HighlightColor::Normal);
@@ -91,8 +129,10 @@ impl Highlight {
                 highlight_row[ci - 1]
             };
 
+            // Single line comment
             if scs.len() > 0
                 && in_string.is_none()
+                && !in_comment
                 && line.len() > scs.len()
                 && ci < line.len() - scs.len()
             {
@@ -103,6 +143,38 @@ impl Highlight {
                     break;
                 }
             }
+
+            // Multiline comment
+            if mcs.len() > 0 && mce.len() > 0 && in_string.is_none() {
+                if in_comment {
+                    highlight_row.push(HighlightColor::MultilineComment);
+                    if let Some(chars) = &line.get(ci..ci + mce.len()) {
+                        if chars == &mce {
+                            for _ in 1..mce.len() {
+                                highlight_row.push(HighlightColor::MultilineComment);
+                            }
+                            skip = mce.len() - 2;
+                            in_comment = false;
+                            prev_sep = true;
+                            continue;
+                        }
+                    }
+                    continue;
+                } else {
+                    if let Some(chars) = &line.get(ci..ci + mcs.len()) {
+                        if chars == &mcs {
+                            for _ in 0..mcs.len() {
+                                highlight_row.push(HighlightColor::MultilineComment);
+                            }
+                            skip = mcs.len() - 1;
+                            in_comment = true;
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // String
             if (self.syntax.flags & SyntaxFlags::HL_STRING).bits() != 0 {
                 match in_string {
                     Some(quotation) => {
@@ -127,6 +199,8 @@ impl Highlight {
                     }
                 }
             }
+
+            // Number
             if (self.syntax.flags & SyntaxFlags::HL_NUMBER).bits() != 0 {
                 if (chr.is_digit(10) && (prev_sep || prev_hl == HighlightColor::Number))
                     || (chr == '.' && prev_hl == HighlightColor::Number)
@@ -136,6 +210,8 @@ impl Highlight {
                     continue;
                 }
             }
+
+            // Keyword
             if prev_sep {
                 for keyword in self.syntax.keywords {
                     let mut is_kw2 = false;
@@ -169,7 +245,14 @@ impl Highlight {
             highlight_row.push(HighlightColor::Normal);
             prev_sep = is_separator(chr);
         }
-        highlight_row
+
+        let current_in_comment = self.in_comment[row_index].clone();
+        if in_comment != current_in_comment {
+            self.in_comment[row_index] = in_comment;
+            (highlight_row, Some(row_index + 1))
+        } else {
+            (highlight_row, None)
+        }
     }
 }
 
