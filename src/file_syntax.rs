@@ -6,14 +6,16 @@ use std::fmt;
 pub enum FileType {
     Undefined,
     C,
+    Rust,
 }
 
 impl fmt::Display for FileType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use FileType::*;
         match *self {
-            Undefined => write!(f, "undef"),
-            C => write!(f, "c"),
+            Undefined => write!(f, "--"),
+            C => write!(f, "C"),
+            Rust => write!(f, "Rust"),
         }
     }
 }
@@ -73,17 +75,35 @@ const C_KEYWEORDS: [&'static str; 23] = [
     "void|",
 ];
 
+const RUST_EXTENSIONS: [&'static str; 1] = ["rs"];
+
+const RUST_KEYWEORDS: [&'static str; 37] = [
+    "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false|", "fn", "for",
+    "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref|", "return",
+    "self|", "Self|", "static", "struct", "super", "trait", "true|", "type", "unsafe", "use",
+    "where", "while", "async", "await",
+];
+
 pub static SYNTAX_DB: Lazy<HashMap<&std::ffi::OsStr, FileSyntax>> = Lazy::new(|| {
     use FileType::*;
     let mut result = HashMap::new();
 
-    let syntaxes = vec![FileSyntax {
-        ftype: C,
-        extensions: &C_EXTENSIONS,
-        singleline_comment_start: "//",
-        keywords: &C_KEYWEORDS,
-        flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
-    }];
+    let syntaxes = vec![
+        FileSyntax {
+            ftype: C,
+            extensions: &C_EXTENSIONS,
+            singleline_comment_start: "//",
+            keywords: &C_KEYWEORDS,
+            flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
+        },
+        FileSyntax {
+            ftype: Rust,
+            extensions: &RUST_EXTENSIONS,
+            singleline_comment_start: "//",
+            keywords: &RUST_KEYWEORDS,
+            flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
+        },
+    ];
     for s in syntaxes {
         for ext in s.extensions.iter() {
             result.insert(std::ffi::OsStr::new(ext.clone()), s);
