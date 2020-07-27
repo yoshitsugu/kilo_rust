@@ -38,6 +38,7 @@ pub struct Window {
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const KILO_TAB_STOP: usize = 8;
 const DISPLAY_STATUS_MESSAGE_DURATION: u64 = 3;
+const DEFAULT_COLOR: u8 = 39;
 
 impl Window {
     pub fn new(mut stdin: &mut io::Stdin) -> Result<Window, io::Error> {
@@ -216,7 +217,7 @@ impl Window {
                         0
                     };
                     self.text_buffer.push_str("\x1b[39m");
-                    let mut last_color = 39;
+                    let mut last_color = DEFAULT_COLOR;
                     for (ci, chr) in line[line_min..line_max].chars().enumerate() {
                         if chr.is_control() {
                             let mut bytes = [0; 2];
@@ -229,6 +230,9 @@ impl Window {
                             };
                             self.text_buffer
                                 .push_str(&format!("\x1b[7m{}\x1b[m", converted_chr));
+                            if last_color != DEFAULT_COLOR {
+                                self.text_buffer.push_str(&format!("\x1b[{}m", last_color));
+                            }
                         } else {
                             let color = self.highlight.color(filerow, ci + line_min);
                             if last_color != color {
