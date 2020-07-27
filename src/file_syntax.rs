@@ -7,6 +7,7 @@ pub enum FileType {
     Undefined,
     C,
     Rust,
+    Ruby,
 }
 
 impl fmt::Display for FileType {
@@ -16,6 +17,7 @@ impl fmt::Display for FileType {
             Undefined => write!(f, "--"),
             C => write!(f, "C"),
             Rust => write!(f, "Rust"),
+            Ruby => write!(f, "Ruby"),
         }
     }
 }
@@ -53,7 +55,7 @@ impl FileSyntax {
 }
 const C_EXTENSIONS: [&'static str; 3] = ["c", "cpp", "h"];
 
-const C_KEYWEORDS: [&'static str; 23] = [
+const C_KEYWORDS: [&'static str; 23] = [
     "switch",
     "if",
     "while",
@@ -81,11 +83,57 @@ const C_KEYWEORDS: [&'static str; 23] = [
 
 const RUST_EXTENSIONS: [&'static str; 1] = ["rs"];
 
-const RUST_KEYWEORDS: [&'static str; 37] = [
+const RUST_KEYWORDS: [&'static str; 37] = [
     "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false|", "fn", "for",
     "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref|", "return",
     "self|", "Self|", "static", "struct", "super", "trait", "true|", "type", "unsafe", "use",
     "where", "while", "async", "await",
+];
+
+const RUBY_EXTENSIONS: [&'static str; 1] = ["rb"];
+
+const RUBY_KEYWORDS: [&'static str; 41] = [
+    "__ENCODING__|",
+    "__LINE__|",
+    "__FILE__|",
+    "BEGIN|",
+    "END|",
+    "alias",
+    "and",
+    "begin",
+    "break",
+    "case",
+    "class",
+    "def",
+    "defined?",
+    "do",
+    "else",
+    "elsif",
+    "end",
+    "ensure",
+    "false|",
+    "for",
+    "if",
+    "in",
+    "module",
+    "next",
+    "nil|",
+    "not",
+    "or",
+    "redo",
+    "rescue",
+    "retry",
+    "return",
+    "self|",
+    "super",
+    "then",
+    "true|",
+    "undef",
+    "unless",
+    "until",
+    "when",
+    "while",
+    "yield ",
 ];
 
 pub static SYNTAX_DB: Lazy<HashMap<&std::ffi::OsStr, FileSyntax>> = Lazy::new(|| {
@@ -99,7 +147,7 @@ pub static SYNTAX_DB: Lazy<HashMap<&std::ffi::OsStr, FileSyntax>> = Lazy::new(||
             singleline_comment_start: "//",
             multiline_comment_start: "/*",
             multiline_comment_end: "*/",
-            keywords: &C_KEYWEORDS,
+            keywords: &C_KEYWORDS,
             flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
         },
         FileSyntax {
@@ -108,7 +156,16 @@ pub static SYNTAX_DB: Lazy<HashMap<&std::ffi::OsStr, FileSyntax>> = Lazy::new(||
             singleline_comment_start: "//",
             multiline_comment_start: "/*",
             multiline_comment_end: "*/",
-            keywords: &RUST_KEYWEORDS,
+            keywords: &RUST_KEYWORDS,
+            flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
+        },
+        FileSyntax {
+            ftype: Ruby,
+            extensions: &RUBY_EXTENSIONS,
+            singleline_comment_start: "#",
+            multiline_comment_start: "=begin",
+            multiline_comment_end: "=end",
+            keywords: &RUBY_KEYWORDS,
             flags: SyntaxFlags::HL_NUMBER | SyntaxFlags::HL_STRING,
         },
     ];
