@@ -220,11 +220,12 @@ impl Highlight {
                         kw = &keyword[0..keyword.len() - 1];
                         is_kw2 = true;
                     }
-                    if line[ci..].len() < kw.len() + 1 {
+                    if line[ci..].len() < kw.len() {
                         continue;
                     }
                     if &line[ci..ci + kw.len()] == kw
-                        && is_separator(line.chars().nth(ci + kw.len()).unwrap())
+                        && (line[ci..].len() == kw.len()
+                            || is_separator(line.chars().nth(ci + kw.len()).unwrap()))
                     {
                         for _ in 0..kw.len() {
                             if is_kw2 {
